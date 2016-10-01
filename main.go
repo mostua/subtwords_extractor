@@ -1,7 +1,12 @@
 package main
 
-import "fmt"
-import "flag"
+import (
+	"flag"
+	"fmt"
+	"io/ioutil"
+
+	"github.com/mostua/subtwords_extractor/parser"
+)
 
 type inputOptions struct {
 	fileName string
@@ -31,11 +36,23 @@ func parseFlag() (*inputOptions, *parseFlagError) {
 }
 
 func main() {
-	inputOptions, err := parseFlag()
-	if err != nil {
+	inputOptions, flagErr := parseFlag()
+	if flagErr != nil {
 		fmt.Printf("Invalid params.\n")
-		fmt.Printf("%s\n", err.message)
+		fmt.Printf("%s\n", flagErr.message)
 		return
 	}
 	fmt.Printf("Filename: %s\n", inputOptions.fileName)
+	bytes, err := ioutil.ReadFile(inputOptions.fileName)
+	if err != nil {
+		fmt.Printf("Unexpected error occured %v", err)
+		return
+	}
+	subt := string(bytes)
+	parser := &parser.SrtParser{}
+	_, parseErr := parser.Parse(subt)
+	if parseErr != nil {
+		fmt.Printf("Parsing error %v", parseErr)
+	}
+
 }
