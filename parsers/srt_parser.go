@@ -3,7 +3,6 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 )
@@ -17,7 +16,6 @@ func parseInt(val string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	log.Printf("Parsed number %d", tmp)
 	return int(tmp), nil
 }
 
@@ -62,19 +60,22 @@ func (parser *SrtParser) Parse(subitlesTxt string) (result []*Subtitle, parseErr
 	subitlesTxt = strings.Replace(subitlesTxt, "\r\n", "\n", -1)
 	// and then split in the linux way
 	lines := strings.Split(subitlesTxt, "\n")
+	var subtitle *Subtitle
 	for lineNumber := 0; lineNumber < len(lines); lineNumber++ {
 		line := lines[lineNumber]
-		log.Printf("Line %d: %s", lineNumber, line)
-		subtitle := &Subtitle{}
+		// omit empty lines
+		if line == "" {
+			continue
+		}
 		switch parseState {
 		case sNUM:
 			// try to parse number of subtitle
 
 			subNumber, err := parseInt(line)
-			log.Printf("subNumber %d", subNumber)
 			if err != nil {
 				return nil, NewParseError("Cannot read subtitle number")
 			}
+			subtitle = &Subtitle{}
 			subtitle.num = subNumber
 			// new state -> time
 			parseState = sTIME
@@ -87,7 +88,7 @@ func (parser *SrtParser) Parse(subitlesTxt string) (result []*Subtitle, parseErr
 			if err != nil {
 				return nil, NewParseError("Cannot read `from` time: " + err.Error())
 			}
-			to, err := parseSrtTime(times[0])
+			to, err := parseSrtTime(times[1])
 			if err != nil {
 				return nil, NewParseError("Cannot read `to` time: " + err.Error())
 			}
@@ -96,31 +97,21 @@ func (parser *SrtParser) Parse(subitlesTxt string) (result []*Subtitle, parseErr
 			// new state -> subtitle
 			parseState = sSUBTITLE
 		case sSUBTITLE:
-			for {
-				// get next
-				lineNumber++
-				if lineNumber >= len(lines) {
-					// save subtitle
-					subtitle.text = line
-					result = append(result, subtitle)
-					break
-				}
+			// move to nextLine
+			subtitle.text = line
+			lineNumber++
+			for lineNumber < len(lines) {
 				// read line
 				nextLine := lines[lineNumber]
-				// it is the end
-				// subtitles with single number after the begining will fail :(
-				if _, err := parseInt(nextLine); err != nil {
-					// save subtitle
-					subtitle.text = line
-					result = append(result, subtitle)
-					// move backwords
-					lineNumber--
-					// change state
-					parseState = sNUM
+				// it is the end ?
+				if nextLine == "" {
 					break
 				}
-				line += "\n" + nextLine
+				subtitle.text += "\n" + nextLine
+				lineNumber++
 			}
+			result = append(result, subtitle)
+			parseState = sNUM
 		}
 	}
 	return result, nil
